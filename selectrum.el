@@ -737,11 +737,6 @@ PRED defaults to `minibuffer-completion-predicate'."
       (setq displayed-candidates
             (seq-take displayed-candidates
                       selectrum-num-candidates-displayed))
-      (let ((n (1+ (if selectrum-fix-minibuffer-height
-                       selectrum-num-candidates-displayed
-                     (max (1- (window-height)) ; grow only
-                          (length displayed-candidates))))))
-        (setf (window-height) n))
       (let ((text (selectrum--candidates-display-string
                    displayed-candidates
                    input
@@ -788,6 +783,16 @@ PRED defaults to `minibuffer-completion-predicate'."
         (setq text (concat (or default " ") text))
         (put-text-property 0 1 'cursor t text)
         (overlay-put selectrum--candidates-overlay 'after-string text)))
+    ;; Set initial min height.
+    (when (and selectrum-fix-minibuffer-height
+               selectrum--init-p)
+      (let ((n (1+ selectrum-num-candidates-displayed)))
+        (setf (window-height) n)))
+    ;; Grow if needed to display current candidates.
+    (let ((height (cdr (window-text-pixel-size))))
+      (when (> height (window-pixel-height))
+        (window-resize nil
+                       (- height (window-pixel-height)) nil nil 'pixelwise)))
     (setq selectrum--end-of-input-marker (set-marker (make-marker) bound))
     (set-marker-insertion-type selectrum--end-of-input-marker t)
     (selectrum--fix-set-minibuffer-message)
@@ -958,12 +963,11 @@ CANDIDATES is the list of strings that was passed to
 `selectrum-read'. DEFAULT-CANDIDATE, if provided, is added to the
 list and sorted first. INITIAL-INPUT, if provided, is inserted
 into the user input area to start with."
-  ;; Avoid wrong minibuffer height. Minibuffer height is currently
-  ;; determined by amount of lines and not actual display height.
-  (setq-local line-spacing nil)
   (add-hook
    'minibuffer-exit-hook #'selectrum--minibuffer-exit-hook nil 'local)
   (setq-local selectrum--init-p t)
+  (when selectrum--candidates-overlay
+    (delete-overlay selectrum--candidates-overlay))
   (setq selectrum--candidates-overlay
         (make-overlay (point) (point) nil 'front-advance 'rear-advance))
   (setq selectrum--start-of-input-marker (point-marker))
